@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Aurora DSQL Optimistic Concurrency Control Game Infrastructure v2'
+
+Resources:
+  # DynamoDB Table for User Management
+  UserTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: aurora-dsql-game-users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: userName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: userName
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: UserNameIndex
+          KeySchema:
+            - AttributeName: userName
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # DynamoDB Table for Attack Logs
+  AttackLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: aurora-dsql-game-attack-logs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: logId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: logId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # Aurora DSQL Cluster
+  DSQLCluster:
+    Type: AWS::DSQL::Cluster
+    Properties:
+      DeletionProtectionEnabled: false
+
+  # IAM Role for EC2 to access DynamoDB and Aurora DSQL
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonRDSDataFullAccess
+      Policies:
+        - PolicyName: DSQLAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dsql:*
+                Resource: '*'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+Outputs:
+  UserTableName:
+    Description: 'DynamoDB User Table Name'
+    Value: !Ref UserTable
+    Export:
+      Name: !Sub '${AWS::StackName}-UserTableName'
+  
+  AttackLogTableName:
+    Description: 'DynamoDB Attack Log Table Name'
+    Value: !Ref AttackLogTable
+    Export:
+      Name: !Sub '${AWS::StackName}-AttackLogTableName'
+  
+  DSQLClusterIdentifier:
+    Description: 'Aurora DSQL Cluster Identifier'
+    Value: !Ref DSQLCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-DSQLClusterIdentifier'
+  
+  EC2RoleArn:
+    Description: 'EC2 IAM Role ARN'
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2RoleArn'
